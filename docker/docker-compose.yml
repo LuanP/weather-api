@@ -1,0 +1,67 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: ./docker/Dockerfile
+    image: weather/api
+    container_name: weather-api
+    command:
+      [
+        "${WEATHER_DB_HOST}:${WEATHER_DB_PORT}",
+        "--timeout=0",
+        "--",
+        "/app/docker/entrypoint.sh",
+      ]
+    environment:
+      OPENWEATHERMAP_API_KEY: ${OPENWEATHERMAP_API_KEY:-your-api-key}
+      SECRET_KEY: ${SECRET_KEY:-django-insecure-cbr1p&$zn9jd()-f*%3c44(o=mmyy5i(tsis6v0%@stix4b=bg}
+      DEBUG: ${DEBUG:-True}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+
+      # Postgres
+      WEATHER_DB_NAME: ${WEATHER_DB_NAME:-weather-db}
+      WEATHER_DB_USERNAME: ${WEATHER_DB_USERNAME:-weather-db}
+      WEATHER_DB_PASSWORD: ${WEATHER_DB_PASSWORD:-weather-db}
+      WEATHER_DB_HOST: ${WEATHER_DB_HOST:-db}
+      WEATHER_DB_PORT: ${WEATHER_DB_PORT:-5432}
+
+      # Redis Cache
+      CACHE_LOCATION: ${CACHE_LOCATION:-redis://redis:6379/1}
+    ports:
+      - "8000:80"
+    links:
+      - redis
+      - db
+
+  redis:
+    image: redis:6.2.2-alpine3.13
+    container_name: redis
+    ports:
+      - "6378:6379"
+
+  db:
+    image: weather/db
+    container_name: weather-db
+    build:
+      context: ../db
+      dockerfile: ./Dockerfile
+    environment:
+      POSTGRES_DB: ${BASE_DB_NAME:-db}
+      POSTGRES_PASSWORD: ${BASE_DB_PASSWORD:-db}
+      POSTGRES_USER: ${BASE_DB_USER:-db}
+      WEATHER_DB_PASSWORD: ${WEATHER_DB_PASSWORD:-weather-db}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_DB:-db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: on-failure
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5431:5432"
+
+volumes:
+  postgres-data:
